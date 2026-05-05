@@ -1,17 +1,47 @@
+# fe.py
+# Git Branch: frontend-dev (veya benzeri)
+
 import tkinter as tk
 from tkinter import messagebox
 
-customers = []
+# ------------------ BRANCH UYUMU (MOCKING) ------------------
+# Frontend henüz main'e merge edilmediyse ve be.py ortamda yoksa 
+# kodun arayüz testleri için çökmesini engelliyoruz.
+try:
+    from be import Customer, CustomerManager
+    print("Sistem: Gerçek Backend (be.py) bulundu ve yüklendi.")
+except ImportError:
+    print("Sistem UYARISI: be.py bulunamadı! Frontend branch'inde geliştirme yapılıyor varsayılıyor.")
+    print("Sistem: Sahte (Mock) Backend ile devam ediliyor...\n")
+    
+    # Frontend'i test etmek için sahte sınıflar
+    class Customer:
+        def __init__(self, name, company, balance, delay_days, active_projects):
+            self.name = name
+            self.company = company
+            self.balance = float(balance)
+            self.delay_days = int(delay_days)
+            self.active_projects = int(active_projects)
+            self.risk_level = "MOCK RISK"
+            self.status_note = "MOCK NOT"
 
-# ------------------ RISK ------------------
-def calculate_risk(balance, delay):
-    if balance > 50000 or delay > 30:
-        return "High"
-    elif balance > 20000 or delay > 15:
-        return "Medium"
-    return "Low"
+    class CustomerManager:
+        def __init__(self):
+            self.customers = []
+        def add_customer(self, customer):
+            self.customers.append(customer)
+        def get_all_customers(self):
+            return self.customers
+        def get_dashboard_data(self):
+            return {
+                "total": len(self.customers), "high": 0, "medium": 0, "low": len(self.customers),
+                "avg": 999.99, "max_balance": 9999, "max_delay": 99
+            }
 
-# ------------------ ADD ------------------
+# Yönetici nesnemizi başlatıyoruz
+manager = CustomerManager()
+
+# ------------------ FONKSİYONLAR ------------------
 def add_customer():
     try:
         name = entry_name.get()
@@ -20,28 +50,17 @@ def add_customer():
         delay = int(entry_delay.get())
         project = int(entry_project.get())
 
-        risk = calculate_risk(balance, delay)
-
-        customer = {
-            "name": name,
-            "company": company,
-            "balance": balance,
-            "delay": delay,
-            "project": project,
-            "risk": risk
-        }
-
-        customers.append(customer)
+        new_customer = Customer(name, company, balance, delay, project)
+        manager.add_customer(new_customer)
 
         render_list()
         render_dashboard()
+        clear_form()
 
-        messagebox.showinfo("Başarılı", "Müşteri eklendi")
+        messagebox.showinfo("Başarılı", f"{name} adlı müşteri eklendi.")
+    except ValueError:
+        messagebox.showerror("Hata", "Lütfen bakiye, gecikme ve proje sayıları için sayısal değer giriniz.")
 
-    except:
-        messagebox.showerror("Hata", "Geçersiz veri")
-
-# ------------------ CLEAR ------------------
 def clear_form():
     entry_name.delete(0, tk.END)
     entry_company.delete(0, tk.END)
@@ -49,110 +68,70 @@ def clear_form():
     entry_delay.delete(0, tk.END)
     entry_project.delete(0, tk.END)
 
-# ------------------ TEST DATA ------------------
 def load_test():
     test_data = [
-        ("Ali", "ABC", 10000, 5, 2),
-        ("Veli", "XYZ", 30000, 20, 1),
-        ("Ayşe", "QWE", 60000, 40, 3)
+        ("Ali Yılmaz", "ABC A.Ş.", 10000, 5, 2),
+        ("Veli Demir", "XYZ Ltd.", 30000, 20, 1),
+        ("Ayşe Kaya", "QWE A.Ş.", 60000, 40, 0)
     ]
-
-    for t in test_data:
-        risk = calculate_risk(t[2], t[3])
-        customers.append({
-            "name": t[0],
-            "company": t[1],
-            "balance": t[2],
-            "delay": t[3],
-            "project": t[4],
-            "risk": risk
-        })
-
+    for data in test_data:
+        c = Customer(data[0], data[1], data[2], data[3], data[4])
+        manager.add_customer(c)
     render_list()
     render_dashboard()
 
-# ------------------ LIST ------------------
 def render_list():
     listbox.delete(0, tk.END)
-    for c in customers:
-        listbox.insert(tk.END,
-            f"{c['name']} - {c['company']} | Bakiye:{c['balance']} | Gecikme:{c['delay']} | Risk:{c['risk']}"
-        )
+    for c in manager.get_all_customers():
+        info = f"{c.name} - {c.company} | Bakiye: {c.balance} | Gecikme: {c.delay_days} | Risk: {c.risk_level}"
+        if c.status_note:
+            info += f" | Not: {c.status_note}"
+        listbox.insert(tk.END, info)
 
-# ------------------ DASHBOARD ------------------
 def render_dashboard():
-    total = len(customers)
-    high = medium = low = 0
-    total_balance = 0
-    max_balance = 0
-    max_delay = 0
-
-    for c in customers:
-        if c["risk"] == "High":
-            high += 1
-        elif c["risk"] == "Medium":
-            medium += 1
-        else:
-            low += 1
-
-        total_balance += c["balance"]
-        max_balance = max(max_balance, c["balance"])
-        max_delay = max(max_delay, c["delay"])
-
-    avg = total_balance / total if total else 0
-
+    data = manager.get_dashboard_data()
     dashboard_label.config(text=
-        f"Toplam: {total} | High: {high} | Medium: {medium} | Low: {low} | "
-        f"Ortalama: {avg:.2f} | Max Bakiye: {max_balance} | Max Gecikme: {max_delay}"
+        f"Toplam: {data['total']} | Yüksek Risk: {data['high']} | Orta: {data['medium']} | Düşük: {data['low']}\n"
+        f"Ort Bakiye: {data['avg']:.2f} | Max Bakiye: {data['max_balance']} | Max Gecikme: {data['max_delay']}"
     )
 
-# ------------------ UI ------------------
+# ------------------ UI (ARAYÜZ) ------------------
 root = tk.Tk()
-root.title("Customer Management")
-root.geometry("700x600")
+root.title("Müşteri Yönetim Paneli")
+root.geometry("750x600")
 
-# FORM
-tk.Label(root, text="Customer Entry Form", font=("Arial", 14)).pack()
-
+# Form
+tk.Label(root, text="Müşteri Giriş Formu", font=("Arial", 14, "bold")).pack(pady=10)
 frame = tk.Frame(root)
 frame.pack(pady=10)
 
-tk.Label(frame, text="Müşteri Adı").grid(row=0, column=0)
-entry_name = tk.Entry(frame)
-entry_name.grid(row=0, column=1)
+labels = ["Müşteri Adı", "Firma Adı", "Açık Bakiye", "Gecikme Günü", "Aktif Proje"]
+entries = []
 
-tk.Label(frame, text="Firma Adı").grid(row=1, column=0)
-entry_company = tk.Entry(frame)
-entry_company.grid(row=1, column=1)
+for i, label_text in enumerate(labels):
+    tk.Label(frame, text=label_text).grid(row=i, column=0, padx=5, pady=5)
+    entry = tk.Entry(frame)
+    entry.grid(row=i, column=1, padx=5, pady=5)
+    entries.append(entry)
 
-tk.Label(frame, text="Açık Bakiye").grid(row=2, column=0)
-entry_balance = tk.Entry(frame)
-entry_balance.grid(row=2, column=1)
+entry_name, entry_company, entry_balance, entry_delay, entry_project = entries
 
-tk.Label(frame, text="Gecikme Günü").grid(row=3, column=0)
-entry_delay = tk.Entry(frame)
-entry_delay.grid(row=3, column=1)
-
-tk.Label(frame, text="Aktif Proje Sayısı").grid(row=4, column=0)
-entry_project = tk.Entry(frame)
-entry_project.grid(row=4, column=1)
-
-# BUTTONS
+# Butonlar
 btn_frame = tk.Frame(root)
 btn_frame.pack(pady=10)
+tk.Button(btn_frame, text="Müşteri Ekle", command=add_customer, bg="#4CAF50", fg="white", width=15).grid(row=0, column=0, padx=10)
+tk.Button(btn_frame, text="Temizle", command=clear_form, width=15).grid(row=0, column=1, padx=10)
+tk.Button(btn_frame, text="Test Veri Yükle", command=load_test, bg="#2196F3", fg="white", width=15).grid(row=0, column=2, padx=10)
 
-tk.Button(btn_frame, text="Müşteri Ekle", command=add_customer).grid(row=0, column=0, padx=5)
-tk.Button(btn_frame, text="Formu Temizle", command=clear_form).grid(row=0, column=1, padx=5)
-tk.Button(btn_frame, text="Test Veri Yükle", command=load_test).grid(row=0, column=2, padx=5)
-
-# LIST
-tk.Label(root, text="Customer List", font=("Arial", 12)).pack()
-listbox = tk.Listbox(root, width=100)
+# Liste
+tk.Label(root, text="Müşteri Listesi", font=("Arial", 12, "bold")).pack(pady=5)
+listbox = tk.Listbox(root, width=90, height=10)
 listbox.pack(pady=10)
 
-# DASHBOARD
-tk.Label(root, text="Dashboard", font=("Arial", 12)).pack()
-dashboard_label = tk.Label(root, text="")
-dashboard_label.pack()
+# Dashboard
+tk.Label(root, text="Dashboard", font=("Arial", 12, "bold")).pack(pady=5)
+dashboard_label = tk.Label(root, text="", font=("Arial", 10), justify="center")
+dashboard_label.pack(pady=10)
 
-root.mainloop()
+if __name__ == "__main__":
+    root.mainloop()
