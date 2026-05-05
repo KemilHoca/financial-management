@@ -1,137 +1,206 @@
-# fe.py
-# Git Branch: frontend-dev (veya benzeri)
-
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import ttk, messagebox
+from typing import List, Tuple, Optional
+from dataclasses import dataclass
 
-# ------------------ BRANCH UYUMU (MOCKING) ------------------
-# Frontend henüz main'e merge edilmediyse ve be.py ortamda yoksa 
-# kodun arayüz testleri için çökmesini engelliyoruz.
-try:
-    from be import Customer, CustomerManager
-    print("Sistem: Gerçek Backend (be.py) bulundu ve yüklendi.")
-except ImportError:
-    print("Sistem UYARISI: be.py bulunamadı! Frontend branch'inde geliştirme yapılıyor varsayılıyor.")
-    print("Sistem: Sahte (Mock) Backend ile devam ediliyor...\n")
+@dataclass
+class Customer:
+    """Müşteri veri modeli"""
+    name: str
+    company: str
+    balance: float
+    delay: int
+    project: int
+    risk: str = ""
+
+class CustomerManager:
+    """Ana müşteri yönetim sınıfı"""
     
-    # Frontend'i test etmek için sahte sınıflar
-    class Customer:
-        def __init__(self, name, company, balance, delay_days, active_projects):
-            self.name = name
-            self.company = company
-            self.balance = float(balance)
-            self.delay_days = int(delay_days)
-            self.active_projects = int(active_projects)
-            self.risk_level = "MOCK RISK"
-            self.status_note = "MOCK NOT"
+    def __init__(self):
+        self.customers: List[Customer] = []
+        self.selected_index: Optional[int] = None
+        self.entries = []
+        self.ui = None 
+        
+    def calculate_risk(self, balance: float, delay: int) -> str:
+        if balance > 50000 or delay > 30:
+            return "High"
+        elif balance > 20000 or delay > 15:
+            return "Medium"
+        return "Low"
+    
+    def validate(self, name: str, company: str, balance: float, 
+                delay: int, project: int) -> Optional[str]:
+        if not name.strip():
+            return "Müşteri adı boş olamaz"
+        if not company.strip():
+            return "Firma adı boş olamaz"
+        if any(x < 0 for x in [balance, delay, project]):
+            return "Negatif değer kullanılamaz"
+        return None
+    
+    def get_form_data(self) -> Tuple[str, str, float, int, int]:
+        return (
+            self.entries[0].get().strip(),
+            self.entries[1].get().strip(),
+            float(self.entries[2].get() or 0),
+            int(self.entries[3].get() or 0),
+            int(self.entries[4].get() or 0)
+        )
+    
+    def clear_form(self):
+        self.selected_index = None
+        for entry in self.entries:
+            entry.delete(0, tk.END)
+    
+    def refresh_all(self):
+        self.render_table()
+        self.render_dashboard()
 
-    class CustomerManager:
-        def __init__(self):
-            self.customers = []
-        def add_customer(self, customer):
-            self.customers.append(customer)
-        def get_all_customers(self):
-            return self.customers
-        def get_dashboard_data(self):
-            return {
-                "total": len(self.customers), "high": 0, "medium": 0, "low": len(self.customers),
-                "avg": 999.99, "max_balance": 9999, "max_delay": 99
-            }
+    def add_customer(self):
+        try:
+            name, company, balance, delay, project = self.get_form_data()
+            error = self.validate(name, company, balance, delay, project)
+            if error:
+                messagebox.showerror("❌ Hata", error)
+                return
+            
+            risk = self.calculate_risk(balance, delay)
+            self.customers.append(Customer(name, company, balance, delay, project, risk))
+            self.refresh_all()
+            self.clear_form()
+            messagebox.showinfo("✅ Başarılı", "Müşteri başarıyla eklendi!")
+        except ValueError:
+            messagebox.showerror("❌ Hata", "Lütfen sayısal alanlara geçerli sayı girin!")
 
-# Yönetici nesnemizi başlatıyoruz
-manager = CustomerManager()
+    def update_customer(self):
+        if self.selected_index is None:
+            messagebox.showerror("❌ Hata", "Lütfen düzenlenecek kaydı seçin!")
+            return
+        try:
+            name, company, balance, delay, project = self.get_form_data()
+            risk = self.calculate_risk(balance, delay)
+            self.customers[self.selected_index] = Customer(name, company, balance, delay, project, risk)
+            self.refresh_all()
+            self.clear_form()
+            messagebox.showinfo("✅ Başarılı", "Müşteri güncellendi!")
+        except Exception as e:
+            messagebox.showerror("❌ Hata", f"Hata: {str(e)}")
 
-# ------------------ FONKSİYONLAR ------------------
-def add_customer():
-    try:
-        name = entry_name.get()
-        company = entry_company.get()
-        balance = float(entry_balance.get())
-        delay = int(entry_delay.get())
-        project = int(entry_project.get())
+    def delete_customer(self):
+        if self.selected_index is None:
+            messagebox.showerror("❌ Hata", "Lütfen silinecek kaydı seçin!")
+            return
+        if messagebox.askyesno("🗑️ Sil", "Bu kaydı silmek istediğinize emin misiniz?"):
+            del self.customers[self.selected_index]
+            self.selected_index = None
+            self.refresh_all()
+            self.clear_form()
 
-        new_customer = Customer(name, company, balance, delay, project)
-        manager.add_customer(new_customer)
+    def select_customer(self, event):
+        selected = self.ui.tree.focus()
+        if not selected: return
+        values = self.ui.tree.item(selected, "values")
+        if not values: return
+            
+        self.selected_index = int(values[0])
+        customer = self.customers[self.selected_index]
+        
+        for entry in self.entries: entry.delete(0, tk.END)
+        self.entries[0].insert(0, customer.name)
+        self.entries[1].insert(0, customer.company)
+        self.entries[2].insert(0, str(customer.balance))
+        self.entries[3].insert(0, str(customer.delay))
+        self.entries[4].insert(0, str(customer.project))
 
-        render_list()
-        render_dashboard()
-        clear_form()
+    def render_table(self):
+        for item in self.ui.tree.get_children(): self.ui.tree.delete(item)
+        for i, c in enumerate(self.customers):
+            self.ui.tree.insert("", "end", values=(i, c.name, c.company, f"{c.balance:,.0f}", c.delay, c.risk), tags=(c.risk,))
 
-        messagebox.showinfo("Başarılı", f"{name} adlı müşteri eklendi.")
-    except ValueError:
-        messagebox.showerror("Hata", "Lütfen bakiye, gecikme ve proje sayıları için sayısal değer giriniz.")
+    def render_dashboard(self):
+        if not self.customers:
+            self.ui.dashboard_var.set("📊 Veri yok")
+            return
+        total = len(self.customers)
+        total_balance = sum(c.balance for c in self.customers)
+        self.ui.dashboard_var.set(f"👥 Toplam Müşteri: {total} | 💰 Toplam Bakiye: {total_balance:,.0f} ₺")
 
-def clear_form():
-    entry_name.delete(0, tk.END)
-    entry_company.delete(0, tk.END)
-    entry_balance.delete(0, tk.END)
-    entry_delay.delete(0, tk.END)
-    entry_project.delete(0, tk.END)
+    def load_test_data(self):
+        test_data = [("Ahmet Yılmaz", "TechCorp", 15000, 8, 2), ("Ayşe Kaya", "Finans Ltd", 45000, 25, 1)]
+        for name, company, balance, delay, project in test_data:
+            risk = self.calculate_risk(balance, delay)
+            self.customers.append(Customer(name, company, balance, delay, project, risk))
+        self.refresh_all()
 
-def load_test():
-    test_data = [
-        ("Ali Yılmaz", "ABC A.Ş.", 10000, 5, 2),
-        ("Veli Demir", "XYZ Ltd.", 30000, 20, 1),
-        ("Ayşe Kaya", "QWE A.Ş.", 60000, 40, 0)
-    ]
-    for data in test_data:
-        c = Customer(data[0], data[1], data[2], data[3], data[4])
-        manager.add_customer(c)
-    render_list()
-    render_dashboard()
+class CustomerUI:
+    def __init__(self, manager: CustomerManager):
+        self.manager = manager
+        self.setup_ui()
+    
+    def setup_ui(self):
+        self.root = tk.Tk()
+        self.root.title("🏢 Müşteri Yönetim Sistemi PRO")
+        self.root.geometry("1000x700")
+        self.dashboard_var = tk.StringVar(value="📊 Veri yok")
+        
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # Üst Panel
+        header = ttk.Frame(self.root)
+        header.pack(pady=10)
+        ttk.Label(header, text="Müşteri Yönetim Paneli", font=("Segoe UI", 14, "bold")).pack()
 
-def render_list():
-    listbox.delete(0, tk.END)
-    for c in manager.get_all_customers():
-        info = f"{c.name} - {c.company} | Bakiye: {c.balance} | Gecikme: {c.delay_days} | Risk: {c.risk_level}"
-        if c.status_note:
-            info += f" | Not: {c.status_note}"
-        listbox.insert(tk.END, info)
+        # Form
+        self.create_form_panel()
+        
+        # Butonlar
+        btn_frame = ttk.Frame(self.root)
+        btn_frame.pack(pady=10)
+        ttk.Button(btn_frame, text="➕ Ekle", command=self.manager.add_customer).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="✏️ Güncelle", command=self.manager.update_customer).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="🗑️ Sil", command=self.manager.delete_customer).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="📊 Test Veri", command=self.manager.load_test_data).pack(side="left", padx=5)
 
-def render_dashboard():
-    data = manager.get_dashboard_data()
-    dashboard_label.config(text=
-        f"Toplam: {data['total']} | Yüksek Risk: {data['high']} | Orta: {data['medium']} | Düşük: {data['low']}\n"
-        f"Ort Bakiye: {data['avg']:.2f} | Max Bakiye: {data['max_balance']} | Max Gecikme: {data['max_delay']}"
-    )
+        # Tablo
+        self.create_table_panel()
+        
+        # İstatistik
+        ttk.Label(self.root, textvariable=self.dashboard_var, font=("Segoe UI", 10, "italic")).pack(pady=10)
 
-# ------------------ UI (ARAYÜZ) ------------------
-root = tk.Tk()
-root.title("Müşteri Yönetim Paneli")
-root.geometry("750x600")
+    def create_form_panel(self):
+        frame = ttk.LabelFrame(self.root, text="Müşteri Bilgileri", padding=10)
+        frame.pack(fill="x", padx=20)
+        labels = ["Müşteri", "Firma", "Bakiye", "Gecikme", "Proje"]
+        for i, text in enumerate(labels):
+            ttk.Label(frame, text=text).grid(row=0, column=i*2, padx=5)
+            ent = ttk.Entry(frame, width=15)
+            ent.grid(row=0, column=i*2+1, padx=5)
+            self.manager.entries.append(ent)
 
-# Form
-tk.Label(root, text="Müşteri Giriş Formu", font=("Arial", 14, "bold")).pack(pady=10)
-frame = tk.Frame(root)
-frame.pack(pady=10)
+    def create_table_panel(self):
+        columns = ("id", "name", "company", "balance", "delay", "risk")
+        # HATANIN DÜZELTİLDİĞİ YER: columns parametresi eklendi
+        self.tree = ttk.Treeview(self.root, columns=columns, show="headings", height=15)
+        
+        headers = ["ID", "Müşteri", "Firma", "Bakiye", "Gecikme", "Risk"]
+        for col, head in zip(columns, headers):
+            self.tree.heading(col, text=head)
+            self.tree.column(col, width=100, anchor="center")
+            
+        self.tree.pack(fill="both", expand=True, padx=20)
+        self.tree.bind("<<TreeviewSelect>>", self.manager.select_customer)
+        
+        self.tree.tag_configure("High", background="#ffcccc")
+        self.tree.tag_configure("Medium", background="#ffffcc")
+        self.tree.tag_configure("Low", background="#ccffcc")
 
-labels = ["Müşteri Adı", "Firma Adı", "Açık Bakiye", "Gecikme Günü", "Aktif Proje"]
-entries = []
-
-for i, label_text in enumerate(labels):
-    tk.Label(frame, text=label_text).grid(row=i, column=0, padx=5, pady=5)
-    entry = tk.Entry(frame)
-    entry.grid(row=i, column=1, padx=5, pady=5)
-    entries.append(entry)
-
-entry_name, entry_company, entry_balance, entry_delay, entry_project = entries
-
-# Butonlar
-btn_frame = tk.Frame(root)
-btn_frame.pack(pady=10)
-tk.Button(btn_frame, text="Müşteri Ekle", command=add_customer, bg="#4CAF50", fg="white", width=15).grid(row=0, column=0, padx=10)
-tk.Button(btn_frame, text="Temizle", command=clear_form, width=15).grid(row=0, column=1, padx=10)
-tk.Button(btn_frame, text="Test Veri Yükle", command=load_test, bg="#2196F3", fg="white", width=15).grid(row=0, column=2, padx=10)
-
-# Liste
-tk.Label(root, text="Müşteri Listesi", font=("Arial", 12, "bold")).pack(pady=5)
-listbox = tk.Listbox(root, width=90, height=10)
-listbox.pack(pady=10)
-
-# Dashboard
-tk.Label(root, text="Dashboard", font=("Arial", 12, "bold")).pack(pady=5)
-dashboard_label = tk.Label(root, text="", font=("Arial", 10), justify="center")
-dashboard_label.pack(pady=10)
+    def run(self):
+        self.root.mainloop()
 
 if __name__ == "__main__":
-    root.mainloop()
+    manager = CustomerManager()
+    ui = CustomerUI(manager)
+    manager.ui = ui
+    ui.run()
