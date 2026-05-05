@@ -1,3 +1,5 @@
+# be.py
+# Git Branch: backend-dev (veya benzeri)
 
 class Customer:
     def __init__(self, name, company, balance, delay_days, active_projects):
@@ -6,21 +8,20 @@ class Customer:
         self.balance = float(balance)
         self.delay_days = int(delay_days)
         self.active_projects = int(active_projects)
-        self.risk_level = "Normal"
+        self.risk_level = ""
         self.status_note = ""
         
         self.analyze_risk()
 
     def analyze_risk(self):
-        notes = []
-        
-        if self.delay_days > 30:
-            self.risk_level = "Yüksek Risk"
-        elif self.delay_days > 20:
-            self.risk_level = "Acil Uyarı"
-        elif self.balance > 50000:
-            self.risk_level = "Uyarı"
+        if self.balance > 50000 or self.delay_days > 30:
+            self.risk_level = "High"
+        elif self.balance > 20000 or self.delay_days > 15:
+            self.risk_level = "Medium"
+        else:
+            self.risk_level = "Low"
 
+        notes = []
         if self.active_projects == 0:
             notes.append("Pasif Müşteri")
         if self.delay_days > 0:
@@ -28,43 +29,47 @@ class Customer:
             
         self.status_note = ", ".join(notes)
 
-class Add:
-    def __init__(self, customer):
-        self.customer = customer
+class CustomerManager:
+    def __init__(self):
+        self.customers = []
 
-    def add_customer(self):
-        # Müşteri ekleme işlemi burada yapılır
-        print(f"{self.customer.name} adlı müşteri eklendi.")
+    def add_customer(self, customer):
+        self.customers.append(customer)
 
-class Service:
-    def __init__(self, customer):
-        self.customer = customer
+    def get_all_customers(self):
+        return self.customers
 
-    def provide_service(self):
-        # Hizmet sağlama işlemi burada yapılır
-        print(f"{self.customer.name} adlı müşteriye hizmet sağlanıyor.")
+    def get_dashboard_data(self):
+        total = len(self.customers)
+        high = medium = low = 0
+        total_balance = max_balance = max_delay = 0
 
-class Validate:
-    def __init__(self, customer):
-        self.customer = customer
-
-        def validate_customer(self):
-            # Müşteri doğrulama işlemi burada yapılır
-            if self.customer.risk_level == "Yüksek Risk":
-                print(f"{self.customer.name} adlı müşteri yüksek riskli olarak işaretlendi.")
+        for c in self.customers:
+            if c.risk_level == "High":
+                high += 1
+            elif c.risk_level == "Medium":
+                medium += 1
             else:
-                print(f"{self.customer.name} adlı müşteri doğrulandı.")
+                low += 1
 
-class İnput:
-    def __init__(self, name, company, balance, delay_days, active_projects):
-        self.name = name
-        self.company = company
-        self.balance = balance
-        self.delay_days = delay_days
-        self.active_projects = active_projects
+            total_balance += c.balance
+            if c.balance > max_balance:
+                max_balance = c.balance
+            if c.delay_days > max_delay:
+                max_delay = c.delay_days
 
-    def get_customer_data(self):
-        return Customer(self.name, self.company, self.balance, self.delay_days, self.active_projects)
+        avg = total_balance / total if total > 0 else 0
 
+        return {
+            "total": total,
+            "high": high,
+            "medium": medium,
+            "low": low,
+            "avg": avg,
+            "max_balance": max_balance,
+            "max_delay": max_delay
+        }
 
-
+# Dosya direkt çalıştırılırsa bu kısım devreye girer (Backend testi için)
+if __name__ == "__main__":
+    print("Backend servisi aktif. Modül olarak içe aktarılmaya (import) hazır.")
